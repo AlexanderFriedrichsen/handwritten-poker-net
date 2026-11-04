@@ -21,8 +21,12 @@ function encode(raw) {
   return suitCount.concat(rankCount);
 }
 
-function forward(netJson, x) {
-  let h = x.slice();
+function forwardWithActivations(netJson, x) {
+  // activations[0] is the encoded input; activations[i+1] is layer i's
+  // output. Kept as one pass so the demo's live per-neuron display can
+  // never drift from the value actually used by the next layer.
+  const activations = [x.slice()];
+  let h = x;
   for (const layer of netJson.layers) {
     const out = new Array(layer.W.length);
     for (let r = 0; r < layer.W.length; r++) {
@@ -34,8 +38,14 @@ function forward(netJson, x) {
       out[r] = layer.activation === "relu" ? Math.max(0, acc) : acc;
     }
     h = out;
+    activations.push(h);
   }
-  return h;
+  return activations;
+}
+
+function forward(netJson, x) {
+  const activations = forwardWithActivations(netJson, x);
+  return activations[activations.length - 1];
 }
 
 function argmax(arr) {
@@ -48,10 +58,11 @@ function argmax(arr) {
 
 function classify(netJson, raw) {
   const x = encode(raw);
-  const logits = forward(netJson, x);
-  return { classIndex: argmax(logits), logits, encoded: x };
+  const activations = forwardWithActivations(netJson, x);
+  const logits = activations[activations.length - 1];
+  return { classIndex: argmax(logits), logits, encoded: x, activations };
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { encode, forward, argmax, classify };
+  module.exports = { encode, forward, forwardWithActivations, argmax, classify };
 }

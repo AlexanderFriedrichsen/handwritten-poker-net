@@ -69,6 +69,29 @@
   .encoded { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem; color: var(--muted); margin-top: 14px; line-height: 1.6; }
   footer { color: var(--muted); font-size: 0.78rem; margin-top: 28px; line-height: 1.5; }
   code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+  .layer-block { margin-bottom: 10px; }
+  .layer-block summary {
+    cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--muted);
+    padding: 6px 2px;
+  }
+  .layer-block summary:hover { color: var(--text); }
+  .neuron-list {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 2px 10px; margin-top: 4px;
+  }
+  .neuron-row {
+    display: grid; grid-template-columns: 1fr 44px; align-items: baseline;
+    gap: 8px; padding: 2px 6px; border-radius: 4px; font-size: 0.78rem;
+  }
+  .neuron-row.active { background: rgba(102, 187, 106, 0.12); }
+  .neuron-name {
+    font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .neuron-row.active .neuron-name { color: var(--good); }
+  .neuron-val { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+  .neuron-row.active .neuron-val { color: var(--good); font-weight: 600; }
+  .neuron-count { font-weight: 400; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -89,6 +112,16 @@
     <div class="result-headline" id="headline"></div>
     <div class="bars" id="bars"></div>
     <div class="encoded" id="encoded"></div>
+  </div>
+
+  <div class="panel" id="activations-panel" style="display:none">
+    <p class="sub" style="margin:0 0 10px">
+      Live hidden-layer activations for this hand. Every neuron below is named and
+      documented (hover a name for its full description); green rows fired (value &gt; 0)
+      for this exact hand. These are the same <code>out_names</code> / <code>out_docs</code>
+      used in <code>figures/neuron_reference.md</code>.
+    </p>
+    <div id="layers"></div>
   </div>
 
   <footer>
@@ -219,10 +252,45 @@ function buildPresets() {
   });
 }
 
+function renderActivations(activations) {
+  const container = document.getElementById("layers");
+  container.innerHTML = "";
+  // activations[0] is the encoded input (shown separately below); the last
+  // entry is the final class logits (shown in the bars above) - everything
+  // in between is a hidden layer's named neurons.
+  for (let li = 0; li < NET.layers.length - 1; li++) {
+    const layer = NET.layers[li];
+    const values = activations[li + 1];
+    const details = document.createElement("details");
+    details.className = "layer-block";
+    details.open = true;
+    const summary = document.createElement("summary");
+    summary.innerHTML = `Layer ${li} <span class="neuron-count">(${values.length} neurons, ${layer.activation})</span>`;
+    details.appendChild(summary);
+    const grid = document.createElement("div");
+    grid.className = "neuron-list";
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i];
+      const row = document.createElement("div");
+      row.className = "neuron-row" + (v > 0 ? " active" : "");
+      row.title = layer.out_docs[i];
+      row.innerHTML = `
+        <div class="neuron-name">${layer.out_names[i]}</div>
+        <div class="neuron-val">${v.toFixed(2)}</div>
+      `;
+      grid.appendChild(row);
+    }
+    details.appendChild(grid);
+    container.appendChild(details);
+  }
+  document.getElementById("activations-panel").style.display = "block";
+}
+
 function runClassify() {
   const raw = readRaw();
   if (!checkDuplicates(raw)) return;
-  const { classIndex, logits, encoded } = classify(NET, raw);
+  const { classIndex, logits, encoded, activations } = classify(NET, raw);
+  renderActivations(activations);
 
   document.getElementById("result-panel").style.display = "block";
   document.getElementById("headline").innerHTML =

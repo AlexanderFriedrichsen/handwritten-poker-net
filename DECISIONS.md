@@ -365,3 +365,38 @@ on every hand that exists, including every hand in the test file. Reported
 here anyway, in full, because the ruling requires the test file read and
 `RESULTS.md` must state this plainly rather than asserting it secondhand
 from the combinatorial proof alone.
+
+## 2026-11-03 - Demo gap found on re-reading spec.md: added live neuron activations
+
+Re-read `spec.md` Phase 5 directly before drafting the remaining deliverables,
+rather than continuing from my own paraphrase of it. Its exact wording: "a
+single self-contained HTML page where the user picks 5 cards and sees the
+predicted hand plus **live activations of the named neurons**." The demo as
+it stood (built and browser-verified earlier this session) showed only the
+final prediction, the 10 output logits, and the 17-dim encoded input - no
+hidden-layer activations at all, despite every neuron's name and doc string
+already being exported to `demo/weights.json` via `out_names`/`out_docs`
+(`export_js.py:20-22`). This was a real gap against an explicit requirement,
+not a style choice.
+
+Fixed by extending `demo/forward_pass.js`'s forward pass to return every
+intermediate layer's activation vector (`forwardWithActivations`), not just
+the final logits, and adding a new panel to `demo/template.html` that
+renders all 7 hidden layers' neurons (168 total) grouped by layer, each row
+showing its name, live value, and (on hover) its full doc string, with
+nonzero ("fired") neurons highlighted. `classify()`'s return value gained an
+`activations` field; existing callers (`classIndex`/`logits`/`encoded`) are
+unchanged, so `tests/js_parity_runner.js` needed no changes.
+
+Verified live in a real browser (Playwright, same `http://127.0.0.1:8743`
+local-server workaround as the earlier verification pass - Playwright still
+blocks `file://`, the shipped artifact is unaffected). Royal-flush preset
+traces a coherent causal chain: `flush_in_suit_3` and the five Broadway
+`rank_count_*__pt1` neurons fire in layer 0, `has_flush`/`rank_*_present`
+in layer 1, `broadway`/`has_flush__pt3` in layer 2, `royal_flush` itself
+fires in layer 3, and `class_logit_9` propagates through the remaining
+layers to the output. "Nothing" preset fires only 12 of 168 hidden neurons
+(five rank-presence detectors, `distinct_ranks_regime`, and the `nothing`
+concept) - no spurious pair/flush/straight activity. Full pytest suite
+(26 tests, including the JS/numpy parity test) still passes. No console
+errors in either case.
