@@ -1,0 +1,213 @@
+{
+  "model": "handnet_v1",
+  "weights_path": "weights/handnet_v1.npz",
+  "rows_evaluated": 1000000,
+  "class_names": [
+    "nothing",
+    "one_pair",
+    "two_pair",
+    "three_of_a_kind",
+    "straight",
+    "flush",
+    "full_house",
+    "four_of_a_kind",
+    "straight_flush",
+    "royal_flush"
+  ],
+  "param_counts": {
+    "per_layer": [
+      {
+        "layer": 0,
+        "nonzero_weights": 56,
+        "nonzero_biases": 43
+      },
+      {
+        "layer": 1,
+        "nonzero_weights": 108,
+        "nonzero_biases": 0
+      },
+      {
+        "layer": 2,
+        "nonzero_weights": 90,
+        "nonzero_biases": 10
+      },
+      {
+        "layer": 3,
+        "nonzero_weights": 18,
+        "nonzero_biases": 2
+      },
+      {
+        "layer": 4,
+        "nonzero_weights": 14,
+        "nonzero_biases": 1
+      },
+      {
+        "layer": 5,
+        "nonzero_weights": 22,
+        "nonzero_biases": 2
+      },
+      {
+        "layer": 6,
+        "nonzero_weights": 17,
+        "nonzero_biases": 0
+      },
+      {
+        "layer": 7,
+        "nonzero_weights": 10,
+        "nonzero_biases": 0
+      }
+    ],
+    "nonzero_weights": 335,
+    "nonzero_biases": 58,
+    "nonzero_params_total": 393
+  },
+  "n": 1000000,
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
+  "per_class_recall": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0
+  ],
+  "per_class_support": [
+    501209,
+    422498,
+    47622,
+    21121,
+    3885,
+    1996,
+    1424,
+    230,
+    12,
+    3
+  ],
+  "confusion_matrix": [
+    [
+      501209,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      422498,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      47622,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      21121,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      3885,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1996,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1424,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      230,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      12,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3
+    ]
+  ]
+}

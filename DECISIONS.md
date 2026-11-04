@@ -340,3 +340,28 @@ confirmed correct on every training-file label and stands unchanged as the
 net used for the rest of this project. Per ruling #1, `RESULTS.md` will
 still report this explicitly as "v1 == v2 (no revision triggered)" rather
 than silently omitting the v2 row, so the audit step itself is auditable.
+
+## 2026-11-03 - Final test-set evaluation of the hand-written net
+
+Per ruling #1 ("The 1M-row test file's labels are read only once, for
+final evaluation - never for design or tuning"), ran
+`scripts/eval_test_set.py`: the first and only read of
+`data/poker-hand-testing.data`'s labels anywhere in this project, and the
+only time this file is used for anything but a baseline's final scoring.
+
+- Rows evaluated: 1,000,000 (full file).
+- Accuracy: **1.000000** (1,000,000 / 1,000,000).
+- Macro-F1: **1.000000**.
+- Per-class recall: 1.000000 on all 10 classes, including the 12
+  straight-flush rows and all 3 royal-flush rows in the file.
+- Forward pass wall time: 0.78s for 1,000,000 rows (pure numpy).
+- Full breakdown: `results/handnet_test_eval.json`.
+
+This is not a surprise - it is the expected consequence of the pre-freeze
+exhaustive proof (0 mismatches against the independent oracle across all
+2,598,960 possible unordered hands) and the Phase 2 audit (0 mismatches
+against UCI's actual training labels): the net was already proven correct
+on every hand that exists, including every hand in the test file. Reported
+here anyway, in full, because the ruling requires the test file read and
+`RESULTS.md` must state this plainly rather than asserting it secondhand
+from the combinatorial proof alone.
