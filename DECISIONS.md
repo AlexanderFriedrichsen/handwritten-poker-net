@@ -461,3 +461,46 @@ findings for `RESULTS.md` to draw from.
   budget (seed still perturbs weight init and minibatch order), which is
   the expected contrast and corroborates the explanation rather than
   pointing to a data bug.
+
+## 2026-11-03 - RESULTS.md written; re-read spec.md before writing it
+
+Before writing the Phase 4 results document, re-read `spec.md` in full a second
+time (not just the earlier session's paraphrase of it) specifically to avoid
+repeating the Phase-5 paraphrasing mistake caught earlier in this project. This
+surfaced one easy-to-miss detail: the spec asks for the "this is just a
+compiled rule set, not learning" critique to be addressed in the **README**,
+not in RESULTS.md ("Address the obvious critique ... in the README rather
+than hiding from it"). RESULTS.md therefore reports numbers and honesty
+callouts only, and defers that critique to README.md with an explicit pointer
+at the end of its caveats section.
+
+`scripts/plot_results.py` was added to generate `figures/accuracy_vs_labels.png`:
+accuracy and macro-F1 vs. labels-seen (log-x, mean +/- std error bars) for all
+four baseline families at all three budgets, the hand-written net drawn as a
+horizontal reference line at its single zero-label point, and the two bonus
+rows (raw10 encoding; 500k test-slice) marked as distinct scatter points so
+they cannot be mistaken on sight for part of the fair label-budget comparison.
+Verified by reading the rendered PNG: the hand-written net's line sits above
+every baseline curve on both panels, including both bonus points.
+
+While writing RESULTS.md's rare-class appendix table, re-derived the exact
+per-class (not averaged) recall for classes 6-9 directly from
+`results/baselines.json` rather than reusing the already-reported rare-class
+*mean*, and found a finding worth stating precisely rather than folding into
+the generic "rare classes are hard" framing: at the full 25,010-label budget,
+all three trained families (`mlp_large`, `xgboost`, `lightgbm`) reach **100%
+recall on royal_flush** - the single rarest class in the dataset (4 of
+2,598,960 possible hands, an expected ~0.04 training examples at this budget)
+- while `xgboost` and `lightgbm` both score **0% on straight_flush**, a class
+roughly three times more common. Rarity alone does not predict difficulty
+here; royal flush is a sharp, highly separable pattern (one suit, consecutive
+high ranks) that these models generalize to even with ~zero direct training
+exposure, while straight_flush apparently falls in a region `xgboost`'s and
+`lightgbm`'s split search does not carve out cleanly at this budget. Reported
+this nuance explicitly in RESULTS.md rather than the flatter and less
+accurate "rare = hard" claim.
+
+RESULTS.md, scripts/plot_results.py, and figures/accuracy_vs_labels.png are
+committed together as one unit: the figure and its generating script are
+reproducible from `results/baselines.json` and `results/handnet_test_eval.json`
+alone (no new numbers), so they belong with the document that cites them.
