@@ -1,0 +1,7 @@
+{
+  "rows_read": 25010,
+  "net_vs_uci_mismatches": 0,
+  "oracle_vs_uci_mismatches": 0,
+  "net_vs_oracle_mismatches": 0,
+  "net_vs_uci_examples": []
+}

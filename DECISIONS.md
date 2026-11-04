@@ -306,5 +306,37 @@ weights (zero labels read)"). This entry is itself a zero-label commit.
 
 ## 2026-11-03 - Phase 2 label-definition audit
 
-*(to be filled in next: rows read from the training file, findings, and
-whether the one allowed revision was exercised)*
+Per integrity ruling #1, ran `scripts/audit_labels.py` to read
+`data/poker-hand-training-true.data` for the first time (and the first read
+of any label anywhere in this project). This is also the first commit in
+the project's history that reads label data; it strictly follows the
+freeze commits `263f105` / `a1db650`.
+
+- Rows read: 25,010 (full scan of the training file, matching
+  `data/CHECKSUMS.txt`'s recorded line count).
+- For every row, compared both the frozen net's prediction
+  (`weights/handnet_v1.npz`, forward pass on the row's 17-dim encoding) and
+  the independent oracle's classification (`oracle.classify_raw` on the raw
+  10 features) against UCI's own label column.
+- Net vs. UCI label mismatches: **0 / 25,010**.
+- Oracle vs. UCI label mismatches: **0 / 25,010**.
+- Net vs. oracle mismatches: **0 / 25,010** (expected - already proven
+  identical over the full 2,598,960-hand domain before freezing; this is a
+  consistency check, not new information).
+- Full machine-readable output: `results/label_audit.json`.
+
+Finding: UCI's training-file labels use exactly the straight/flush/royal
+conventions (ace-low straight, ace-high straight, royal flush as a
+straight flush containing the ace-high broadway run, no wraparound
+straights) that `handnet_spec.py` was hand-derived from and that the
+pre-freeze exhaustive validation already checked against UCI's published
+aggregate class-count table. The audit surfaced no convention mismatch and
+no row-level surprise.
+
+**Outcome: the one allowed Phase 2 revision is not exercised.** v1 (the
+frozen zero-label weights, sha256
+`708d63be05b53b2bb421405af5c6ad2901d8ec69689b299f14eb7e3b49c5d78a`) is
+confirmed correct on every training-file label and stands unchanged as the
+net used for the rest of this project. Per ruling #1, `RESULTS.md` will
+still report this explicitly as "v1 == v2 (no revision triggered)" rather
+than silently omitting the v2 row, so the audit step itself is auditable.
