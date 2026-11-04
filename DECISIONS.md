@@ -504,3 +504,57 @@ RESULTS.md, scripts/plot_results.py, and figures/accuracy_vs_labels.png are
 committed together as one unit: the figure and its generating script are
 reproducible from `results/baselines.json` and `results/handnet_test_eval.json`
 alone (no new numbers), so they belong with the document that cites them.
+
+## 2026-11-03 - README.md written; "compiled rule set" critique addressed directly
+
+Wrote README.md: project overview, a table pointing at every deliverable's
+actual file, the three-step hand-written-net construction summary, and a
+dedicated section answering the "this is just a compiled rule set, not
+learning" critique head-on, per the spec's explicit instruction that this
+response belongs in the README rather than RESULTS.md. The section concedes
+the objection is correct on its own terms (it is not statistical
+generalization) and then states precisely what the project does demonstrate
+instead: a checkable no-branching-at-inference-time constraint, a measured
+parameter/accuracy ceiling trained baselines fall well short of even at 20x
+the training file's label count, and that the task was chosen because its
+rules are fully specified and closed-form - the condition under which
+"compile the rules instead of learning them" is possible at all - not to
+dodge the objection by picking an easier comparison.
+
+## 2026-11-03 - scripts/reproduce_all.sh written and verified; smoke-mode plotting bug found and fixed
+
+Wrote scripts/reproduce_all.sh, chaining all 9 regeneration steps (data
+download, weight freeze, label audit, test-set eval, baseline sweep, weight
+figures, results plot, demo build, full test suite) per the spec's Phase 4
+requirement for a one-command regenerate-everything script. Added a
+`SMOKE=1` env var, passed through to `scripts/run_baselines.py --smoke`, as
+a fast (~100s vs. ~20min) end-to-end pipeline-correctness check.
+
+Verified by actually running it (`SMOKE=1 scripts/reproduce_all.sh`), not by
+reading it - this caught a real bug on the first run: `scripts/plot_results.py`
+hard-crashed (`AssertionError: expected exactly one
+exploratory_500k_test_slice row, found 0`) because `run_baselines.py --smoke`
+only fits tiny budgets (50/200) and skips the 500k-test-slice bonus row
+entirely (gated behind `if not smoke:`), so `results/baselines.json` under
+smoke mode has neither the real label budgets nor that bonus row the plot
+script requires. This is not a bug in `plot_results.py` itself - its real,
+documented input (a full, non-smoke `run_baselines.py` run) always has both -
+it is a mismatch between what `--smoke` mode produces and what the plot is
+defined over. Fixed by skipping the plot step under `SMOKE=1` in
+`reproduce_all.sh` with a printed explanation, rather than adding tolerance
+to `plot_results.py` for data that can never represent what the plot claims
+to show.
+
+Re-ran `SMOKE=1 scripts/reproduce_all.sh` after the fix: all 9 steps
+completed, 26/26 tests passed. Also confirmed, by diffing against git after
+each run, that re-running weight construction, the label audit, and the
+test-set evaluation reproduces `weights/handnet_v1.npz` (sha256 still
+`708d63be05b53b2bb421405af5c6ad2901d8ec69689b299f14eb7e3b49c5d78a`),
+`results/label_audit.json`, and `results/handnet_test_eval.json` byte-for-byte
+identical to what is already committed - independent confirmation that the
+pipeline up to that point is fully deterministic, not just that it runs
+without crashing. `results/baselines.json` *is* overwritten by any
+`run_baselines.py` run including `--smoke` ones, since that script doesn't
+check for an existing file; restored it from git (`git restore
+results/baselines.json`) after each smoke run so the real, already-verified
+sweep this project's RESULTS.md reports on was never at risk of being lost.
