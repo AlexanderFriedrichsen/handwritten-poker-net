@@ -558,3 +558,23 @@ without crashing. `results/baselines.json` *is* overwritten by any
 check for an existing file; restored it from git (`git restore
 results/baselines.json`) after each smoke run so the real, already-verified
 sweep this project's RESULTS.md reports on was never at risk of being lost.
+
+## 2026-11-03 - Draft X thread written (not posted)
+
+Wrote `docs/x-thread.md`: a 6-post draft following the spec's exact required
+beats in order (headline number, results table pointer, weight visualization
+pointer, demo link, caveats) plus one more post up front covering the
+construction/freeze/Phase-2 story, which did not fit cleanly alongside the
+headline post without either overloading it or cutting a detail worth
+keeping. Repo/demo links are left as explicit `[repo]`/`[demo]` placeholders
+since nothing in this project has been pushed or published anywhere - there
+is no real link to put there yet, and it would be dishonest to invent one.
+Per the task's standing instruction, this is a draft only: not posted, and no
+tool capable of posting it (the account's xquik access included) was
+touched.
+
+This closes every deliverable in `spec.md`: hand-written net (frozen,
+Phase-2-audited), trained baselines (38-row sweep), RESULTS.md, README.md
+(including the critique response), interpretability figures and demo,
+decision log, and this draft thread. Remaining before declaring done: a
+clean-fast-forward check against `main` and the status-file update.
