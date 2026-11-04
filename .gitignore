@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# raw UCI data: downloaded by data/download.py, never committed
+data/*.data
+data/*.zip
+data/*.names
+
+.no-mistakes/

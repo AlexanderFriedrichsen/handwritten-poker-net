@@ -1,0 +1,3 @@
+37becdf87d5f8cbf2b91d6471e965a25b86cb4a6d878c0f94a4025969fca464f  poker-hand-training-true.data  (25010 lines)
+3cd75958e19dd321ed5ca3f7f154c0f6aad544aab9f37731ac545b5f66b232c7  poker-hand-testing.data  (1000000 lines)
+7a273f795d98e84994390576b604b6fc373552e3f42641a038ec0d51c9bb05f7  poker-hand.names  (151 lines)
