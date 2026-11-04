@@ -416,10 +416,19 @@ findings for `RESULTS.md` to draw from.
   (mean of seeds 0/1/2: 0.9098/0.8873/0.9083) vs 1.0, mean rare-class
   (6-9) recall ~0.70 vs 1.0. Still clearly short on every column.
 - Rare classes (6-9) are where trained models struggle most, as expected:
-  at budget=512, every family scores exactly 0.0 mean recall on classes
-  6-9 (zero or near-zero support in a 512-row sample makes this close to
-  unavoidable). Even at the full 25,010-label budget, `mlp_small` (the
-  size-matched baseline) only reaches ~9% mean rare-class recall.
+  at budget=512, three of the four families (`mlp_small`, `mlp_large`,
+  `xgboost`) score exactly 0.0 mean recall on classes 6-9; `lightgbm`
+  reaches a mean of 0.0080, driven entirely by nonzero class-6 recall in
+  2 of its 3 seeds (0.066 and 0.0295) - still effectively zero, not a
+  real exception. (Checked this precisely after noticing per-class
+  recall is `None`-able when test support is 0 in
+  `metrics.classification_report_dict`
+  (`src/poker_handnet/metrics.py:22-25`); it never is here, since the
+  full 1,000,000-row test file has nonzero support for every class, so
+  all "0.0" values above are genuine measured zeros, not missing data
+  being miscounted as zero.) Even at the full 25,010-label budget,
+  `mlp_small` (the size-matched baseline) only reaches 9.74% mean
+  rare-class recall.
 - Exploratory bonus row (`mlp_large` trained on 500,000 rows of the *test*
   file, evaluated on the other 500,000 - 20x more labels than exist in the
   whole training file): 99.998% accuracy, but still **zero recall on
