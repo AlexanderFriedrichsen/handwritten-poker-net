@@ -300,8 +300,9 @@ row of either `poker-hand-training-true.data` or `poker-hand-testing.data`.
 
 ## 2026-11-03 - Freezing commit hash
 
-*(to be filled in immediately after the freezing commit, via `git rev-parse
-HEAD` run right after it, in a tiny follow-up commit)*
+The freezing commit (construction script + `weights/handnet_v1.npz` +
+tests + this file) is `263f105` ("Freeze hand-written poker-hand net
+weights (zero labels read)"). This entry is itself a zero-label commit.
 
 ## 2026-11-03 - Phase 2 label-definition audit
 
