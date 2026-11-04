@@ -58,6 +58,16 @@ FAMILY_STYLE = {
 }
 
 
+def _format_k(value: float) -> str:
+    """1234 -> '1.2k', 10002 -> '10k' (trailing '.0' dropped) - plain tick
+    labels for the x-rare-hands chart, in place of log-scale scientific
+    notation."""
+    text = f"{value / 1000:.1f}"
+    if text.endswith(".0"):
+        text = text[:-2]
+    return f"{text}k"
+
+
 def rare_recall_avg(row: dict) -> float:
     vals = row["per_class_recall"][6:10]
     return sum(v if v is not None else 0.0 for v in vals) / len(vals)
@@ -132,23 +142,29 @@ def plot_x_rare_hands(agg: dict, budgets: list[int], handnet: dict) -> None:
     )
 
     max_x = 0
+    tick_values: set[int] = set()
     for fam, style in X_RARE_HANDS_SERIES.items():
         xs = [agg[(fam, b)]["labels_seen"] for b in budgets]
         ys = [agg[(fam, b)]["rare_mean"] * 100 for b in budgets]
         max_x = max(max_x, xs[-1])
+        tick_values.update(xs)
         ax.plot(xs, ys, marker="o", markersize=9, linewidth=2.75, color=style["color"])
         ax.annotate(
             style["label"], xy=(xs[-1], ys[-1]), xytext=(10, 0), textcoords="offset points",
             fontsize=16, fontweight="bold", color=style["color"], va="center", ha="left",
         )
+    assert len(tick_values) == len(budgets), "families disagree on labels_seen; ticks would be misleading"
 
     ax.set_xscale("log")
-    ax.set_xlim(right=max_x * 1.9)
+    ax.set_xlim(right=max_x * 1.3)
     ax.set_ylim(0, 103)
     ax.set_xlabel("labels seen (log scale)", fontsize=17)
     ax.set_ylabel("mean recall on the rarest hands (%)", fontsize=17)
     ax.set_title("Trained models vs. a hand-written net on the rarest poker hands", fontsize=20, pad=14)
-    ax.tick_params(axis="both", labelsize=14)
+    ax.set_xticks(sorted(tick_values))
+    ax.set_xticklabels([_format_k(v) for v in sorted(tick_values)])
+    ax.minorticks_off()
+    ax.tick_params(axis="both", labelsize=17)
     ax.grid(alpha=0.3)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
