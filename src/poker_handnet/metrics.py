@@ -60,11 +60,21 @@ def mlp_param_counts(sequential) -> dict:
     }
 
 
-def xgboost_param_counts(booster) -> dict:
+def xgboost_param_counts(booster, num_class: int = N_CLASSES) -> dict:
     """Leaf count (the closest tree analog to a NN's learned scalar weights)
-    and total node count, summed across every tree in the ensemble (one set
-    of trees per class, for multiclass softmax objective)."""
+    and total node count, summed across every tree *actually used at
+    prediction time*. `trees_to_dataframe()` returns every round the booster
+    ever grew, including the `early_stopping_rounds` patience window past
+    `best_iteration` that `predict()` never uses (verified empirically -
+    see DECISIONS.md's "xgboost predict/param-count vs. best_iteration"
+    entry); Tree indices are round-major, class-minor (Tree 0..num_class-1
+    is round 0's one-tree-per-class set, etc.), so `Tree < (best_iteration
+    + 1) * num_class` keeps exactly the deployed trees. When the booster
+    was trained with no early stopping (no `best_iteration` attribute at
+    all), every grown tree is deployed, so nothing is filtered."""
     df = booster.trees_to_dataframe()
+    if hasattr(booster, "best_iteration"):
+        df = df[df["Tree"] < (booster.best_iteration + 1) * num_class]
     n_leaves = int((df["Feature"] == "Leaf").sum())
     n_nodes = int(len(df))
     n_trees = int(df["Tree"].nunique())
@@ -78,6 +88,10 @@ def xgboost_param_counts(booster) -> dict:
 
 
 def lightgbm_param_counts(booster) -> dict:
+    """Unlike xgboost (see above), LightGBM's own `trees_to_dataframe()` and
+    `predict()` both already truncate to `best_iteration` when early
+    stopping was used - verified empirically, not assumed - so no
+    post-hoc filtering is needed here."""
     df = booster.trees_to_dataframe()
     n_leaves = int(df["node_index"].str.contains("L").sum())
     n_nodes = int(len(df))

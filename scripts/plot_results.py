@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""Phase 4 plot: accuracy and macro-F1 vs. labels-seen for every trained
+"""Phase 4 plot: accuracy and macro-F1 vs. training budget for every trained
 baseline (mean +/- std across seeds, log-x), with the frozen hand-written
 net drawn as a horizontal reference line at its one point: 100% test
-accuracy / 1.0 macro-F1 after seeing zero labels. Also marks the two bonus
-rows (raw10 encoding; the 500k-test-slice exploratory run) as distinct,
-clearly-labeled points - they are not part of the fair label-budget
-comparison (see DECISIONS.md) and must not be mistaken for it on sight.
+accuracy / 1.0 macro-F1 after seeing zero labels. The class-balanced variant
+(mlp_large, xgboost) is drawn as a dashed, hollow-marker line next to its
+unweighted counterpart. Also marks the two bonus rows (raw10 encoding; the
+500k-test-slice exploratory run) as distinct, clearly-labeled points - they
+are not part of the fair label-budget comparison (see DECISIONS.md) and
+must not be mistaken for it on sight. The full_budget_no_early_stop rows are
+not plotted here (they are single points per family, best read as a table -
+see RESULTS.md) but are in results/baselines.json like everything else.
 
 Reads results/baselines.json and results/handnet_test_eval.json; writes
 figures/accuracy_vs_labels.png. Writes no new numbers - every value here is
@@ -32,7 +36,9 @@ HANDNET_EVAL_PATH = REPO_ROOT / "results" / "handnet_test_eval.json"
 FIGURES_DIR = REPO_ROOT / "figures"
 
 FAMILIES = ["mlp_small", "mlp_large", "xgboost", "lightgbm"]
-BUDGETS = [512, 5000, 25010]
+# Mirrors run_baselines.py's BALANCED_FAMILIES - the families that have an
+# inverse_frequency class-weighted variant to plot alongside the unweighted one.
+BALANCED_FAMILIES = {"mlp_large", "xgboost"}
 FAMILY_STYLE = {
     "mlp_small": dict(color="#1f77b4", marker="o", label="mlp_small"),
     "mlp_large": dict(color="#ff7f0e", marker="s", label="mlp_large"),
@@ -46,11 +52,20 @@ def rare_recall_avg(row: dict) -> float:
     return sum(v if v is not None else 0.0 for v in vals) / len(vals)
 
 
-def aggregate(rows: list[dict]) -> dict:
+def aggregate(rows: list[dict], budgets: list[int], class_weighting: str) -> dict:
     agg: dict[tuple[str, int], dict] = {}
     for fam in FAMILIES:
-        for budget in BUDGETS:
-            matched = [r for r in rows if r["family"] == fam and r["budget"] == budget and r["variant"] == "encoded17"]
+        for budget in budgets:
+            matched = [
+                r
+                for r in rows
+                if r["family"] == fam
+                and r["budget"] == budget
+                and r["variant"] == "encoded17"
+                and r["class_weighting"] == class_weighting
+            ]
+            if not matched:
+                continue
             accs = np.array([r["accuracy"] for r in matched])
             f1s = np.array([r["macro_f1"] for r in matched])
             rares = np.array([rare_recall_avg(r) for r in matched])
@@ -75,7 +90,11 @@ def main() -> None:
     rows = data["rows"]
     handnet = json.loads(HANDNET_EVAL_PATH.read_text())
 
-    agg = aggregate(rows)
+    budgets = sorted(
+        {r["budget"] for r in rows if r["family"] in FAMILIES and r["variant"] == "encoded17" and r["class_weighting"] == "none"}
+    )
+    agg = aggregate(rows, budgets, "none")
+    agg_bal = aggregate(rows, budgets, "inverse_frequency")
     raw10 = find_bonus(rows, "raw10_bonus")
     slice500k = find_bonus(rows, "exploratory_500k_test_slice")
 
@@ -83,12 +102,27 @@ def main() -> None:
 
     for fam in FAMILIES:
         style = FAMILY_STYLE[fam]
-        acc_means = [agg[(fam, b)]["acc_mean"] for b in BUDGETS]
-        acc_stds = [agg[(fam, b)]["acc_std"] for b in BUDGETS]
-        f1_means = [agg[(fam, b)]["f1_mean"] for b in BUDGETS]
-        f1_stds = [agg[(fam, b)]["f1_std"] for b in BUDGETS]
-        ax_acc.errorbar(BUDGETS, acc_means, yerr=acc_stds, capsize=4, **style)
-        ax_f1.errorbar(BUDGETS, f1_means, yerr=f1_stds, capsize=4, **style)
+        acc_means = [agg[(fam, b)]["acc_mean"] for b in budgets]
+        acc_stds = [agg[(fam, b)]["acc_std"] for b in budgets]
+        f1_means = [agg[(fam, b)]["f1_mean"] for b in budgets]
+        f1_stds = [agg[(fam, b)]["f1_std"] for b in budgets]
+        ax_acc.errorbar(budgets, acc_means, yerr=acc_stds, capsize=4, **style)
+        ax_f1.errorbar(budgets, f1_means, yerr=f1_stds, capsize=4, **style)
+
+    for fam in sorted(BALANCED_FAMILIES):
+        pts = [b for b in budgets if (fam, b) in agg_bal]
+        if not pts:
+            continue
+        bal_style = dict(FAMILY_STYLE[fam])
+        bal_style["label"] = f"{fam} (class-balanced)"
+        bal_style["linestyle"] = "--"
+        bal_style["markerfacecolor"] = "none"
+        acc_means = [agg_bal[(fam, b)]["acc_mean"] for b in pts]
+        acc_stds = [agg_bal[(fam, b)]["acc_std"] for b in pts]
+        f1_means = [agg_bal[(fam, b)]["f1_mean"] for b in pts]
+        f1_stds = [agg_bal[(fam, b)]["f1_std"] for b in pts]
+        ax_acc.errorbar(pts, acc_means, yerr=acc_stds, capsize=4, **bal_style)
+        ax_f1.errorbar(pts, f1_means, yerr=f1_stds, capsize=4, **bal_style)
 
     bonus_style = dict(color="#9467bd", s=90, zorder=5, edgecolor="black", linewidth=0.8)
     ax_acc.scatter([raw10["budget"]], [raw10["accuracy"]], marker="X", label="mlp_large, raw10 encoding (bonus)", **bonus_style)
@@ -104,7 +138,7 @@ def main() -> None:
     for ax, key in ((ax_acc, "accuracy"), (ax_f1, "macro_f1")):
         ax.axhline(handnet[key], color="black", linestyle="--", linewidth=1.5, zorder=4)
         ax.set_xscale("log")
-        ax.set_xlabel("labels seen (training budget, log scale)")
+        ax.set_xlabel("training budget, log scale (+ 5,002 fixed dev labels seen via early\nstopping on every fit - see RESULTS.md's labels-seen table)")
         ax.set_ylim(0, 1.03)
         ax.grid(alpha=0.3)
 

@@ -1,11 +1,20 @@
 """Fixed-seed dev split carved from the training file (integrity ruling #2).
 
-The dev split exists only for baseline hyperparameter tuning and Phase 2
-error inspection - it is never used to pick the hand-written net's weights,
-and it is not subtracted from the pools that label-budget baseline fits
-sample from (those sample from the full training file; the dev split's job
-is choosing training *recipes*, such as early-stopping patience or tree
-depth, once, not inflating any one fit's effective label budget).
+The dev split exists for baseline hyperparameter tuning, per-fit early
+stopping / model selection, and Phase 2 error inspection - it is never used
+to pick the hand-written net's weights. It IS subtracted from the pool that
+every label-budget baseline fit samples from (`scripts/run_baselines.py`'s
+`train_pool_idx`): every individual fit (not just the one-time
+`tune_hparams` call) early-stops against this split on every call to
+`mlp.train_mlp` / `fit_xgb` / `fit_lgb`, so a budget sampled from the full
+training file would let that fit's "training" rows overlap the same rows
+used to pick when to stop training on them - at the full budget, that
+overlap was total. See DECISIONS.md's "baseline budget/dev overlap" entry
+for the bug this previously caused and the fix. Because every fit's
+pipeline genuinely touches both pools, `scripts/run_baselines.py` reports a
+`labels_seen` field (train budget + this split's size) alongside the
+train-only `budget` field, rather than pretending the dev rows were never
+read.
 """
 
 from __future__ import annotations

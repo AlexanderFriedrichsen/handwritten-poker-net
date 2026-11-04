@@ -34,8 +34,8 @@ def make_mlp(size: str, in_dim: int, out_dim: int = 10) -> nn.Sequential:
 def train_mlp(
     X_train: np.ndarray,
     y_train: np.ndarray,
-    X_dev: np.ndarray,
-    y_dev: np.ndarray,
+    X_dev: np.ndarray | None,
+    y_dev: np.ndarray | None,
     size: str,
     seed: int,
     device: str = "cpu",
@@ -43,16 +43,30 @@ def train_mlp(
     max_epochs: int = 3000,
     patience: int = 100,
     weight_decay: float = 1e-5,
+    class_weights: np.ndarray | None = None,
 ) -> tuple[nn.Sequential, dict]:
+    """X_dev/y_dev of None disables early stopping entirely: no dev-loss
+    checkpointing happens, the loop runs exactly max_epochs epochs, and the
+    final-epoch weights are returned as-is (used for the no-early-stop
+    full-budget comparison row - see DECISIONS.md). class_weights, when
+    given, is a length-10 array passed straight to CrossEntropyLoss; it
+    reweights the training objective only, never the dev-loss selection
+    criterion below, so "balanced" and "unbalanced" runs pick checkpoints
+    by the same (natural-distribution) yardstick.
+    """
     torch.manual_seed(seed)
     model = make_mlp(size, in_dim=X_train.shape[1]).to(device).double()
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    loss_fn = nn.CrossEntropyLoss()
+    weight_t = torch.from_numpy(class_weights).double().to(device) if class_weights is not None else None
+    loss_fn = nn.CrossEntropyLoss(weight=weight_t)
 
     Xt = torch.from_numpy(X_train).double().to(device)
     yt = torch.from_numpy(y_train).long().to(device)
-    Xd = torch.from_numpy(X_dev).double().to(device)
-    yd = torch.from_numpy(y_dev).long().to(device)
+    use_dev = X_dev is not None
+    if use_dev:
+        Xd = torch.from_numpy(X_dev).double().to(device)
+        yd = torch.from_numpy(y_dev).long().to(device)
+        dev_loss_fn = nn.CrossEntropyLoss()
 
     batch_size = min(512, len(Xt))
     n = len(Xt)
@@ -74,9 +88,12 @@ def train_mlp(
             loss.backward()
             opt.step()
 
+        if not use_dev:
+            continue
+
         model.eval()
         with torch.no_grad():
-            dev_loss = loss_fn(model(Xd), yd).item()
+            dev_loss = dev_loss_fn(model(Xd), yd).item()
 
         if dev_loss < best_dev_loss - 1e-6:
             best_dev_loss = dev_loss
@@ -87,10 +104,13 @@ def train_mlp(
             if epochs_without_improve >= patience:
                 break
 
-    if best_state is not None:
-        model.load_state_dict(best_state)
+    if use_dev:
+        if best_state is not None:
+            model.load_state_dict(best_state)
+        history = {"epochs_run": epoch + 1, "best_dev_loss": best_dev_loss, "early_stopped": True}
+    else:
+        history = {"epochs_run": epoch + 1, "best_dev_loss": None, "early_stopped": False}
     model.eval()
-    history = {"epochs_run": epoch + 1, "best_dev_loss": best_dev_loss}
     return model, history
 
 
