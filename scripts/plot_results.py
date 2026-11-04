@@ -10,10 +10,21 @@ are not part of the fair label-budget comparison (see DECISIONS.md) and
 must not be mistaken for it on sight. The full_budget_no_early_stop rows are
 not plotted here (they are single points per family, best read as a table -
 see RESULTS.md) but are in results/baselines.json like everything else.
+The x-axis is the training budget (512/5,000/20,008), not labels_seen -
+titled accordingly to match what is actually plotted; the axis label still
+discloses the fixed +5,002 dev labels every fit also reads.
+
+Also writes figures/x_rare_hands.png: a single-panel, phone-readable chart
+for social sharing, mean recall on the rarest hands (classes 6-9) vs. the
+honest labels_seen total (log-x) for the best MLP/XGBoost/LightGBM 3-seed
+means, with the hand-written net as a directly-labeled 100% reference line.
+Unlike the first figure, this one's x-axis genuinely is labels_seen, and
+skips the class-balanced variant and both bonus rows for a single clean
+read.
 
 Reads results/baselines.json and results/handnet_test_eval.json; writes
-figures/accuracy_vs_labels.png. Writes no new numbers - every value here is
-already in those two JSON files.
+both figures. Writes no new numbers - every value here is already in those
+two JSON files.
 """
 
 from __future__ import annotations
@@ -70,11 +81,14 @@ def aggregate(rows: list[dict], budgets: list[int], class_weighting: str) -> dic
             f1s = np.array([r["macro_f1"] for r in matched])
             rares = np.array([rare_recall_avg(r) for r in matched])
             params = np.array([r["param_counts"]["nonzero_params_total"] for r in matched])
+            labels_seen = {r["labels_seen"] for r in matched}
+            assert len(labels_seen) == 1, f"{fam}/{budget} seeds disagree on labels_seen: {labels_seen}"
             agg[(fam, budget)] = {
                 "acc_mean": accs.mean(), "acc_std": accs.std(),
                 "f1_mean": f1s.mean(), "f1_std": f1s.std(),
                 "rare_mean": rares.mean(), "rare_std": rares.std(),
                 "params_mean": params.mean(), "n_seeds": len(matched),
+                "labels_seen": labels_seen.pop(),
             }
     return agg
 
@@ -83,6 +97,67 @@ def find_bonus(rows: list[dict], variant: str) -> dict:
     matched = [r for r in rows if r["variant"] == variant]
     assert len(matched) == 1, f"expected exactly one {variant} row, found {len(matched)}"
     return matched[0]
+
+
+# Social-chart series: the single best-performing MLP size, plus both tree
+# libraries - "2-3 trained series," matching the X-thread's framing of a
+# "best MLP" rather than every family (mlp_small is not competitive at any
+# budget - see RESULTS.md - and would only crowd a chart meant to be read on
+# a phone).
+X_RARE_HANDS_SERIES = {
+    "mlp_large": dict(color=FAMILY_STYLE["mlp_large"]["color"], label="Best MLP"),
+    "xgboost": dict(color=FAMILY_STYLE["xgboost"]["color"], label="XGBoost"),
+    "lightgbm": dict(color=FAMILY_STYLE["lightgbm"]["color"], label="LightGBM"),
+}
+
+
+def plot_x_rare_hands(agg: dict, budgets: list[int], handnet: dict) -> None:
+    """Single-panel, phone-readable chart: mean recall on the rarest hands
+    (classes 6-9) vs. honest labels_seen, log-x, for the unweighted 3-seed
+    means of the best MLP/XGBoost/LightGBM. The hand-written net is a bold
+    100% reference line, labeled directly; no legend box - every series is
+    labeled at its own line end instead. Skips the class-balanced variant
+    and both bonus rows (raw10; the 500k test-slice) for a single clean
+    read, per the X-thread spec.
+    """
+    fig, ax = plt.subplots(figsize=(16, 9))
+
+    handnet_rare = rare_recall_avg(handnet) * 100
+    ax.axhline(handnet_rare, color="black", linestyle="-", linewidth=3.5, zorder=4)
+    ax.annotate(
+        f"Hand-written by Claude, 0 labels: {handnet_rare:.0f}%",
+        xy=(0, handnet_rare), xycoords=("axes fraction", "data"),
+        xytext=(8, -10), textcoords="offset points",
+        fontsize=16, fontweight="bold", va="top", ha="left",
+    )
+
+    max_x = 0
+    for fam, style in X_RARE_HANDS_SERIES.items():
+        xs = [agg[(fam, b)]["labels_seen"] for b in budgets]
+        ys = [agg[(fam, b)]["rare_mean"] * 100 for b in budgets]
+        max_x = max(max_x, xs[-1])
+        ax.plot(xs, ys, marker="o", markersize=9, linewidth=2.75, color=style["color"])
+        ax.annotate(
+            style["label"], xy=(xs[-1], ys[-1]), xytext=(10, 0), textcoords="offset points",
+            fontsize=16, fontweight="bold", color=style["color"], va="center", ha="left",
+        )
+
+    ax.set_xscale("log")
+    ax.set_xlim(right=max_x * 1.9)
+    ax.set_ylim(0, 103)
+    ax.set_xlabel("labels seen (log scale)", fontsize=17)
+    ax.set_ylabel("mean recall on the rarest hands (%)", fontsize=17)
+    ax.set_title("Trained models vs. a hand-written net on the rarest poker hands", fontsize=20, pad=14)
+    ax.tick_params(axis="both", labelsize=14)
+    ax.grid(alpha=0.3)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+
+    fig.tight_layout()
+    out_path = FIGURES_DIR / "x_rare_hands.png"
+    fig.savefig(out_path, dpi=100, bbox_inches="tight")
+    plt.close(fig)
+    print(f"wrote {out_path}")
 
 
 def main() -> None:
@@ -143,9 +218,9 @@ def main() -> None:
         ax.grid(alpha=0.3)
 
     ax_acc.set_ylabel("test accuracy (1,000,000-row test file)")
-    ax_acc.set_title("Accuracy vs. labels seen")
+    ax_acc.set_title("Accuracy vs. training budget")
     ax_f1.set_ylabel("macro-F1 (10 classes, equal weight)")
-    ax_f1.set_title("Macro-F1 vs. labels seen")
+    ax_f1.set_title("Macro-F1 vs. training budget")
 
     handles, labels = ax_acc.get_legend_handles_labels()
     handles = [plt.Line2D([], [], color="black", linestyle="--", linewidth=1.5)] + handles
@@ -159,6 +234,8 @@ def main() -> None:
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"wrote {out_path}")
+
+    plot_x_rare_hands(agg, budgets, handnet)
 
 
 if __name__ == "__main__":

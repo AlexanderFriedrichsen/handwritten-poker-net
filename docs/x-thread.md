@@ -1,74 +1,100 @@
 # Draft X thread (not posted)
 
-Draft only. X Premium long-post format: 4 posts, numbered for order, each meant to stand on its
-own. Written to be honest first and punchy second - trim for length before posting, but do not
-cut any caveat to make it shorter. The repo is public and pushed
-(https://github.com/AlexanderFriedrichsen/handwritten-poker-net); nothing in this document has
-been posted to X yet.
+Draft only, never posted. 4 posts, each at or under 280 characters - counted in Python with
+`len()` on the exact text below (full URL included, so X's real t.co-shortened count is at or
+below the number shown, never above). Each post's text block below is deliberately left
+unwrapped (one line per paragraph) so the character count next to it is exactly what was
+measured - no manual line-wrapping was added that could change the count.
 
 ---
 
-**1/4**
-I had Claude write a neural network by hand from the rules of poker: all 393 non-zero
-parameters derived by its own reasoning about poker hand rankings, zero training labels,
-frozen and hashed before a single label was read anywhere in the project. Pure matmul + ReLU,
-no if-statements at inference time. I benchmarked it against trained models (MLP, XGBoost,
-LightGBM) on the UCI Poker Hand dataset (1,000,000 test hands), same input encoding, same task.
+**1/4** (attach `figures/x_rare_hands.png`)
 
-The hand-written net is exact on every one of the 10 hand classes, every time. The trained
-models are not: at the full training budget - every label in the 25,010-row training file,
-nothing held back for early stopping - they land at 32.6%, 39.7%, and 70.3% mean recall on the
-four rarest hand types (full house through royal flush) for XGBoost, LightGBM, and the best MLP
-respectively. Even a version given 500,000 labels, 20x the entire training file, still missed
-every held-out straight flush and royal flush in its evaluation slice - all misread as plain
-"flush."
+I had Claude write a neural network by hand. No training, zero labels: all 393 parameters reasoned out from the rules of poker.
+
+100% on 1,000,000 test hands, every hand type exact.
+
+Trained nets given 25k labels hit 99.9%, but still miss 30-67% of the rarest hands.
+
+*(266 characters)*
+
+---
 
 **2/4**
-The honest objection: this isn't learning, it's a compiled rule set. Claude derived the logic -
-"count of hearts," "rank 7 present," "five consecutive ranks starting at rank 10" - as a small
-named graph, which a poker-agnostic compiler turns into a real 8-layer feedforward network
-(17 -> 56 -> 53 -> 14 -> 9 -> 11 -> 15 -> 10 -> 10). It didn't discover from data that a flush
-beats a straight; it was told, and the telling sits in a weight matrix instead of an
-if-statement. That's a fair objection and this project doesn't dodge it anywhere.
 
-This exists because of a viral post claiming a model had hand-written the weights of a
-legal-citation classifier - a messier, less-than-fully-specified domain. Poker hand ranking is
-the opposite: a closed-form, fully known function of 5 cards, with no hidden structure a
-learned model could find that the rules don't already capture. That's exactly why "just compile
-the rules" is possible here and is not a general recipe - it would not work on any task whose
-rules are not already fully known. What's actually being measured isn't "rules beat learning"
-in the abstract; it's how far trained models land from a correct, checkable ceiling, on
-identical footing, when that ceiling is free because the domain is fully known.
+Yes, it's a compiled rule set, not learning. It didn't discover that a flush beats a straight; it was told.
+
+That only works because poker's rules are fully known. What it shows: a readable 393-param net that is provably exact, and exactly how far trained models fall short.
+
+*(274 characters)*
+
+---
 
 **3/4**
-Full results (small disclosed hyperparameter grid, 3 seeds, identical 17-dim encoding for every
-model, full writeup and raw numbers in the repo's RESULTS.md):
 
-  Hand-written net      100.0000% acc   1.0000 macro-F1   393 params
-  MLP (111k params)      99.89%  acc   0.9084 macro-F1
-  XGBoost                99.85%  acc   0.7389 macro-F1
-  LightGBM               99.86%  acc   0.7354 macro-F1
+Hand-written: 100% acc, 1.00 macro-F1, 0 labels
+Best MLP (111k params): 99.89%, 0.91
+XGBoost: 99.85%, 0.74
 
-No baseline matches or beats the hand-written net on any metric, at any label budget, anywhere
-in a 60-row sweep - including a class-balanced reweighting variant, which helps at tiny budgets
-but costs macro-F1 at the full one. Accuracy is the misleading column here: XGBoost and
-LightGBM both score 0% recall on straight_flush at the full budget, even with every label spent
-on training and none held out, despite 12 real straight_flush hands in the 1,000,000-row test
-set. Royal flush (3 test examples, the single rarest class in the dataset, four times rarer
-than straight_flush) scores 100% recall across all three trained families here - which argues
-against "rare just means hard": some rare patterns generalize from nearby examples and some
-don't, and a trained model's luck on the rarest classes depends on exactly which few examples
-land in its splits. The hand-written net has no equivalent unpredictability - it is correct on
-all 2,598,960 possible 5-card hands by construction, checked exhaustively, not by having seen
-the right sample.
+Even trained on 500k labels, a model missed every held-out straight flush and royal flush.
+
+*(198 characters)*
+
+---
 
 **4/4**
-Also built: a self-contained browser demo, forward pass running in plain JS checked
-bit-identical to the Python/numpy version, no server or build step needed - clone the repo and
-open demo/index.html directly in a browser. Pick 5 cards, see the predicted hand and the live
-activation of every named neuron.
 
-Everything here - the weight construction, the poker-agnostic compiler, the baselines, the
-figures, the demo - regenerates from scratch with one command (scripts/reproduce_all.sh). Repo,
-full numbers, and the "just a compiled rule set" argument in full:
+Every neuron has a name: "rank 7 present", "broadway". Code, weight heatmaps, a browser demo and one-command reproduce:
 https://github.com/AlexanderFriedrichsen/handwritten-poker-net
+
+*(182 characters)*
+
+---
+
+## Numbers, verified directly against `results/*.json`
+
+- **393 non-zero params, 100.0000% accuracy, 1.0000 macro-F1, recall 1.0 on all 10 classes**:
+  `results/handnet_test_eval.json` (`nonzero_params_total`, `accuracy`, `macro_f1`,
+  `per_class_recall`). "Every hand type exact" is literal, not rounding - every one of the 10
+  `per_class_recall` entries is exactly `1.0`.
+- **"25k labels... 99.9%"** and post 3's per-model accuracy/macro-F1 pairs: the
+  `full_budget_no_early_stop` rows in `results/baselines.json` (single seed, fit on the entire
+  25,010-row training file, 0 dev labels, so `labels_seen == 25,010` exactly) - mlp_large
+  (labeled "Best MLP", 111,690 params) 99.8945% acc / 0.90841 macro-F1; xgboost 99.8542% /
+  0.73888; lightgbm 99.8581% / 0.73539. All three round to "99.9%" accuracy. Per the spec note,
+  these are explicitly single-run numbers, not multi-seed means.
+- **"30-67% miss"**: `1 - rare_mean` (mean recall, classes 6-9) on the same three
+  `full_budget_no_early_stop` rows: mlp_large 1 - 0.70301 = 29.70% (rounds to 30%), xgboost
+  1 - 0.32609 = 67.39% (rounds to 67%), lightgbm 1 - 0.39729 = 60.27%. Range across the three
+  families is 30-67%, matching the brief's own precomputed recall figures (MLP 70.3%, XGBoost
+  32.6%, LightGBM 39.7%) exactly.
+- **"500k labels... missed every held-out straight flush and royal flush"**: the
+  `exploratory_500k_test_slice` row (`baselines.json`) trains mlp_large on `labels_seen=500,000`
+  (`budget=450,000` + `dev_size=50,000`, both drawn from one random half of the 1,000,000-row
+  test file) and evaluates on the other, disjoint half. `per_class_recall` is exactly `0.0` for
+  both straight_flush and royal_flush on that held-out half, whose `per_class_support` is 7 and
+  1 respectively - "every" is literal, not approximate.
+- **"rank 7 present", "broadway"**: `figures/neuron_reference.md` - `rank_7_present` ("1 iff at
+  least one card is rank 7") and `broadway` ("1 iff the hand is Ten-Jack-Queen-King-Ace").
+  Swapped out the earlier draft's "five in a row" for `broadway`, since no neuron is actually
+  named or described that way (the real per-start-rank straight-window nodes are named
+  `straight_window_start_<k>`, and the Ten-high run is the separately named `broadway` node) -
+  `broadway` is real, shorter, and more recognizably poker-specific, so this also tightens
+  post 4 rather than lengthening it.
+
+No number in the original brief was wrong; the one change made beyond verification was the
+"five in a row" -> "broadway" swap above, for accuracy, not length.
+
+## The X-optimized chart
+
+`figures/x_rare_hands.png`: single panel, 16:9, large phone-readable fonts. Y is mean recall on
+classes 6-9 (full house, four of a kind, straight flush, royal flush), 0-100%; X is honest
+`labels_seen` (log scale). Hand-written net is a bold 100% reference line labeled directly, no
+legend box; "Best MLP" (mlp_large), XGBoost, and LightGBM (unweighted, 3-seed means from the
+regular label-budget sweep, not the single-seed full-budget rows post 3 quotes) are labeled at
+their own line ends. Generated by `scripts/plot_results.py`, which `scripts/reproduce_all.sh`
+already calls - no new pipeline step needed. The pre-existing `figures/accuracy_vs_labels.png`
+had a real title/axis mismatch (subplot titles said "vs. labels seen" while the actually-plotted
+x-values were the training budget, 512/5,000/20,008, not `labels_seen`); fixed by renaming the
+titles to "vs. training budget" to match what the plot actually shows, in both the script and
+`RESULTS.md`'s caption - the plotted data itself was correct and is unchanged.
