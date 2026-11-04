@@ -48,9 +48,9 @@ uv run python scripts/run_baselines.py "${RUN_BASELINES_ARGS[@]}"
 step "6/9 figures: weight heatmaps and neuron reference"
 uv run python scripts/plot_weights.py
 
-step "7/9 figures: accuracy/macro-F1 vs. labels-seen plot"
+step "7/9 figures: accuracy/macro-F1 vs. training-budget plot, X-thread rare-hands chart"
 if [[ "${SMOKE:-0} " == "1 " ]]; then
-  echo "SMOKE=1: skipping - this plot is defined over the real label budgets" \
+  echo "SMOKE=1: skipping - these plots are defined over the real label budgets" \
        "(512/5000/25010) and the 500k-slice bonus row, neither of which" \
        "--smoke's tiny budgets produce; nothing meaningful to plot here."
 else
