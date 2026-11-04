@@ -400,3 +400,55 @@ layers to the output. "Nothing" preset fires only 12 of 168 hidden neurons
 concept) - no spurious pair/flush/straight activity. Full pytest suite
 (26 tests, including the JS/numpy parity test) still passes. No console
 errors in either case.
+
+## 2026-11-03 - Full baseline sweep complete: no trained baseline matches the hand-written net
+
+`scripts/run_baselines.py`'s full sweep finished (budgets 512/5000/25010,
+seeds 0/1/2, families mlp_small/mlp_large/xgboost/lightgbm = 36 rows, plus
+the raw10 and 500k-test-slice bonus rows = 38 total; 1006.9s wall time).
+`results/baselines.json` holds the full result including per-class recall
+and confusion matrices for all 38 rows; this entry records the headline
+findings for `RESULTS.md` to draw from.
+
+- **No trained baseline matches or beats the hand-written net anywhere.**
+  The closest is `mlp_large` at the full 25,010-label training budget:
+  99.90% accuracy (vs the hand-written net's 100.0000%), macro-F1 ~0.90
+  (mean of seeds 0/1/2: 0.9098/0.8873/0.9083) vs 1.0, mean rare-class
+  (6-9) recall ~0.70 vs 1.0. Still clearly short on every column.
+- Rare classes (6-9) are where trained models struggle most, as expected:
+  at budget=512, every family scores exactly 0.0 mean recall on classes
+  6-9 (zero or near-zero support in a 512-row sample makes this close to
+  unavoidable). Even at the full 25,010-label budget, `mlp_small` (the
+  size-matched baseline) only reaches ~9% mean rare-class recall.
+- Exploratory bonus row (`mlp_large` trained on 500,000 rows of the *test*
+  file, evaluated on the other 500,000 - 20x more labels than exist in the
+  whole training file): 99.998% accuracy, but still **zero recall on
+  straight_flush and royal_flush** (7 and 1 examples respectively in that
+  random half of the test file - insufficient support even for an
+  otherwise near-perfect model). This is the sharpest illustration of the
+  hand-written net's structural advantage: it gets these classes right by
+  construction, with no dependence on how many examples happen to land in
+  a sample.
+- Bonus row comparing encodings (`mlp_large`, full 25,010-label budget,
+  raw 10-feature encoding instead of the order-invariant 17-dim one):
+  98.60% accuracy, macro-F1 0.52, mean rare-class recall 0.16 - markedly
+  worse than the matched encoded17 run (99.90% / ~0.90 / ~0.70) on
+  identical data and model size. The order-invariant encoding is doing
+  real work for the trained baselines too, not just the hand-written net.
+- At budget=25010 (the full training pool, 25,010 rows), `xgboost` and
+  `lightgbm` give bit-identical accuracy/macro-F1/per-class recall across
+  all three seeds (`xgboost`: 0.9985/0.7392/0.3316 all three seeds;
+  `lightgbm`: 0.9987/0.7060/0.3699 all three seeds). Checked this is not a
+  bug: `fit_xgb`/`fit_lgb` (`scripts/run_baselines.py:50-101`) never set
+  `subsample`/`colsample_bytree` (xgboost) or `bagging_fraction`/
+  `feature_fraction` (lightgbm), so both default to 1.0 - no row or
+  column subsampling at any budget. `sample_budget()`
+  (`scripts/run_baselines.py:44-47`) draws a seed-dependent *permutation*
+  of row indices, but at budget==pool-size that permutation covers every
+  row regardless of seed, so all three seeds train on the identical
+  dataset; with no subsampling, both libraries' deterministic greedy
+  histogram split search then produces identical trees regardless of the
+  `seed` parameter. The MLPs do *not* show this invariance at the same
+  budget (seed still perturbs weight init and minibatch order), which is
+  the expected contrast and corroborates the explanation rather than
+  pointing to a data bug.
