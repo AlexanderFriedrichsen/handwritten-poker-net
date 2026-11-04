@@ -4,8 +4,8 @@
 # from scratch with one command"). Run from anywhere; paths are resolved
 # relative to this script, not the caller's cwd.
 #
-# Wall time: ~20 minutes, dominated by scripts/run_baselines.py (~17 min for
-# the full 38-row sweep). Set SMOKE=1 to pass --smoke to that script instead
+# Wall time: ~20 minutes, dominated by scripts/run_baselines.py (~18 min for
+# the full 60-row sweep). Set SMOKE=1 to pass --smoke to that script instead
 # (tiny budgets/seeds, seconds instead of minutes) for a fast correctness
 # check of the pipeline itself, not a real results run.
 set -euo pipefail

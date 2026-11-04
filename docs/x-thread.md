@@ -21,16 +21,18 @@ present," "five consecutive ranks." The weights were frozen and hashed before a 
 read. The one allowed revision pass found 0 errors and was never used.
 
 **3/6**
-Trained baselines (MLP, XGBoost, LightGBM), same encoding, same dataset, generous tuning, up to
-25,010 labels: none matched it. Closest was a 111k-param MLP at 99.90% accuracy, 0.90 macro-F1.
-XGBoost/LightGBM hit 99.85-99.87% accuracy but only 0.70-0.74 macro-F1 - accuracy hides how badly
-they miss the rare hands. Full table: [repo]/RESULTS.md.
+Trained baselines (MLP, XGBoost, LightGBM), same encoding, same dataset, a small disclosed
+hyperparameter grid, up to 25,010 labels: none matched it. Closest was a 111k-param MLP at
+99.89% accuracy, 0.91 macro-F1. XGBoost/LightGBM hit 99.85-99.86% accuracy but only ~0.74
+macro-F1 - accuracy hides how badly they miss the rare hands. Full table: [repo]/RESULTS.md.
 
 **4/6**
-Even giving a baseline 500,000 labels (20x the whole training set) didn't close the gap - it
-still missed straight flushes and royal flushes outright, just from how few examples of those
-exist anywhere. The hand-written net gets them right every time, by construction, regardless of
-how rare they are. Weight heatmaps, one per layer, labeled by neuron meaning: [repo]/figures/.
+Even giving a baseline 500,000 labels (20x the whole training set) didn't close the gap: it
+trained on 4 real straight_flush and 1 real royal_flush example, yet still missed every one of
+the 7 straight_flush and 1 royal_flush hands in the held-out half - all misclassified as plain
+"flush." Not zero examples anywhere - zero generalization from the few it saw. The hand-written
+net gets every hand right, every time, by construction. Weight heatmaps, one per layer, labeled
+by neuron meaning: [repo]/figures/.
 
 **5/6**
 Built a self-contained demo: pick 5 cards, see the predicted hand and the live activation of

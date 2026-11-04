@@ -578,3 +578,194 @@ Phase-2-audited), trained baselines (38-row sweep), RESULTS.md, README.md
 (including the critique response), interpretability figures and demo,
 decision log, and this draft thread. Remaining before declaring done: a
 clean-fast-forward check against `main` and the status-file update.
+
+## 2026-11-03 - Baseline budget/dev overlap bug fixed (fixes-1.md item 1)
+
+Firstmate review flagged a real methodology bug: `sample_budget()` in an
+earlier version of `scripts/run_baselines.py` drew every label budget from
+all 25,010 training-file rows, while the fixed 20%, seed-pinned dev split
+(5,002 rows) of that same file was used for early stopping / best-
+checkpoint selection on every fit. At the full budget this means training
+rows overlapped the rows the fit was also supposedly "held out" on - the
+stopping criterion was never actually held out at that budget.
+`tune_hparams()` was unaffected (it already sampled from the non-dev pool
+only via `train_pool_idx`); only the per-budget sweep rows and the raw10
+bonus row had the bug.
+
+Fixed by rewriting `sample_budget()` to draw from the 20,008-row non-dev
+pool exclusively, so the top budget is now 20,008, not 25,010. The dev
+split is still used for early stopping on every fit, so every fit's
+pipeline actually reads `budget + dev_size` labels; added `dev_size` and
+`labels_seen` fields to every row in `results/baselines.json` (see its
+`schema_notes`) so this is never hidden behind a bare "budget" number
+again.
+
+Verified the fix moved results in the only direction a dev-overlap bug
+can move them (less flattering, not more) by diffing the new sweep against
+the previously-committed, buggy-methodology `results/baselines.json` (git
+commit `1a81376`) at the equivalent full-budget row:
+- `xgboost`/`lightgbm` royal_flush recall: 100.00% (old, both) -> 66.67%
+  (new, both).
+- `mlp_large` four_of_a_kind recall: 44.49% +/- 1.64 (old) -> 31.59% +/-
+  1.25 (new).
+- `mlp_large` macro-F1, early-stopped: 0.9018 +/- 0.0103 (old) -> 0.8862
+  +/- 0.0145 (new).
+
+Every one of these moved down, confirming the bug had been inflating
+apparent generalization, not deflating it - exactly the direction the
+"training rows overlap the held-out dev rows" mechanism predicts, and
+independent evidence the fix is real rather than cosmetic. Also added one
+`full_budget_no_early_stop` row per family (fixed iteration count, chosen
+from the early-stopped runs' own typical iteration count, zero dev labels
+touched) per fixes-1.md item 1's "optionally add a no-early-stopping row at
+the full budget" suggestion, since it was cheap given the sweep
+infrastructure already existed. That row turned out to produce the single
+best baseline result in the entire 60-row sweep (`mlp_large`, macro-F1
+0.9084) - see RESULTS.md's "Brutal honesty" section for why that, not the
+early-stopped row, is the correct "closest competitor" to cite.
+
+Regenerated `results/baselines.json`, `figures/accuracy_vs_labels.png`,
+and every table in `RESULTS.md` from the fixed script; none of the numbers
+in either document are hand-edited.
+
+## 2026-11-03 - xgboost predict/param-count vs. best_iteration (self-found bug, fixed)
+
+While re-verifying baseline numbers for the item-1 fix above, found a
+second, previously-unnoticed bug: `xgboost.Booster.predict()` does **not**
+automatically limit itself to `best_iteration + 1` rounds after early
+stopping - it predicts using every round the booster ever grew, including
+the `early_stopping_rounds=50` patience window past the best one.
+`Booster.trees_to_dataframe()` has the identical behavior: it returns
+every grown round, not just the deployed ones. Verified empirically, not
+assumed, by comparing `booster.best_iteration` against the max `Tree`
+index in `trees_to_dataframe()`'s output on a fit that early-stopped well
+before its 2,000-round cap - the dataframe listed rounds far past
+`best_iteration`.
+
+This means any xgboost row's reported accuracy and its leaf-count-based
+"non-zero params" figure, before this fix, were silently computed using
+50 extra, never-deployed rounds of trees - a real correctness bug in the
+baseline numbers, independent of the item-1 dev-overlap bug, and one that
+inflates both the model's effective complexity (more leaves reported than
+are actually used) and its reported accuracy (predicting with rounds that
+early stopping never selected is not what "this is the model being
+evaluated" is supposed to mean).
+
+Fixed in two places:
+- `predict_xgb()` (`scripts/run_baselines.py:193-206`): passes
+  `iteration_range=(0, booster.best_iteration + 1)` to `predict()` whenever
+  `best_iteration` exists (i.e. whenever early stopping actually ran); a
+  `fixed_rounds` booster has no `best_iteration` attribute, so nothing is
+  truncated for the no-early-stop rows, which is correct since every grown
+  round there was deployed by design.
+- `metrics.xgboost_param_counts()` (`src/poker_handnet/metrics.py:63-87`):
+  filters `trees_to_dataframe()`'s rows to `Tree < (best_iteration + 1) *
+  num_class` before counting leaves (Tree indices are round-major,
+  class-minor: round 0 occupies Tree 0..9, round 1 occupies Tree 10..19,
+  etc., for `num_class=10`); same guard for the no-`best_iteration` case.
+
+Checked LightGBM for the same class of bug and found it does not have it:
+both `Booster.predict()` and `Booster.trees_to_dataframe()` already
+truncate to `best_iteration` on their own when early stopping ran -
+verified empirically the same way, not assumed by symmetry with xgboost.
+`lightgbm_param_counts()` (`src/poker_handnet/metrics.py:90-105`) needed no
+code change, only a docstring recording that this was checked rather than
+left silently unverified.
+
+## 2026-11-03 - Class-balanced baseline variant added (fixes-1.md item 2)
+
+fixes-1.md item 2 asked for a class-balanced variant on "at least
+mlp_large and one GBDT," since no baseline previously used any
+class-imbalance handling while macro-F1 / rare-class recall were the
+headline gaps. Implemented `compute_class_weights()`
+(`scripts/run_baselines.py:75-105`): +1-Laplace-smoothed
+inverse-frequency weights, capped at a disclosed `max_ratio=20.0`
+(measured uncapped ratio at the full non-dev pool is ~2,513:1 - `(1/4) /
+(1/10053)` on in-budget class counts `[10052, 8425, 964, 405, 76, 47, 27,
+5, 4, 3]` - large enough to destabilize both gradient descent and
+tree-split search if left uncapped). The cap is a disclosed judgment
+call, not a tuned value; there is no "correct" cap without first deciding
+how much training-objective distortion is acceptable, so 20.0 was picked
+as a round number well below the measured ratio and reported as a choice,
+not a derivation.
+
+`BALANCED_FAMILIES = {"mlp_large", "xgboost"}`
+(`scripts/run_baselines.py:66`): the task said "at least mlp_large and one
+GBDT," and between xgboost/lightgbm there is no principled reason to
+prefer either as "the" GBDT for this extra variant - both are scored
+identically everywhere else in this sweep. xgboost was picked arbitrarily
+and the arbitrariness is disclosed here rather than hidden behind a
+post-hoc justification, per the "pick the more rigorous option if
+ambiguous, and log it" instruction - there is no rigor axis distinguishing
+the two, so this is a disclosed coin flip, not a rigorous pick.
+
+Sample weights apply to the training loss only; the dev set used for
+early-stopping / checkpoint selection is never weighted
+(`fit_xgb`/`fit_lgb` docstrings, `scripts/run_baselines.py:108-191`), so
+the balanced and unweighted variants of a given family pick checkpoints by
+the identical rule and differ only in what the training objective itself
+optimized for.
+
+Result (full detail in RESULTS.md's "class-balanced variant" section):
+helps clearly at the smallest budget (512 labels - both families improve
+accuracy and macro-F1), is roughly a wash at the middle budget (5,000), and
+at the full budget makes macro-F1 *worse* for both families (`mlp_large`
+0.8862 -> 0.7848; `xgboost` 0.7045 -> 0.6665) while being genuinely mixed on
+individual rare classes: a real, meaningful lift on `four_of_a_kind` (230
+test examples) for both families, no effect on `straight_flush` (stuck at
+0% for xgboost either way), and an apparent *loss* on `mlp_large`'s
+`royal_flush` recall (100% -> 66.67%, though with only 3 royal_flush test
+rows this is one flipped prediction, not a stable rate). Reported plainly
+in RESULTS.md per the task's "if they close or narrow the gap, say so
+plainly" instruction - and equally plainly where they do not, since the
+instruction does not ask for a one-sided reading.
+
+## 2026-11-03 - README.md and docs/x-thread.md factual corrections (fixes-1.md items 3-4)
+
+Fixed per fixes-1.md item 3, all verified against
+`results/handnet_test_eval.json` / `results/baselines.json` rather than
+hand-edited:
+- README's rarest-3-class counts (previously wrong: "12, and 36, and 4
+  examples") corrected to the actual `per_class_support` values -
+  four_of_a_kind 230, straight_flush 12, royal_flush 3 - citing the exact
+  JSON field.
+- README's Dataset section previously implied label conventions were
+  "verified empirically against the training file before being relied
+  on," reversing the actual order of events; rewritten to state the real
+  sequence: conventions designed from UCI documentation alone, net frozen,
+  *then* audited against training labels (0/25,010 mismatches) as the one
+  allowed Phase 2 revision pass, which found nothing to revise.
+- Grepped README.md, RESULTS.md, and docs/x-thread.md for every other
+  hard-coded count/percentage and confirmed each against
+  `results/*.json`; the two items above were the only stale/wrong ones
+  found at the time (a third, unrelated-to-item-3 staleness - the row
+  count/wall time in README's reproduce section - was also found this way
+  and is logged as part of the item-1 entry's regeneration, not here).
+- Additionally (surfaced by the item-1 fix, not a pre-existing error):
+  README's "closest competitor" line and intro paragraph both referenced
+  the old, buggy-methodology numbers and "generous(ly)-tuned" language.
+  Updated to the regenerated `full_budget_no_early_stop` figures (0.9084
+  macro-F1, the true best baseline result in the sweep) and replaced
+  "generous" with a precise description of the actual bounded
+  hyperparameter grid, since "generous" was itself an unverifiable,
+  flattering-sounding characterization fixes-1.md item 4 separately
+  flagged for the X-thread and that applies equally to the README.
+
+Fixed per fixes-1.md item 4 in `docs/x-thread.md`:
+- Post 3's "generous tuning" replaced with the same precise, bounded
+  description used in README.md, and its baseline numbers updated to the
+  regenerated figures (closest: 111k-param MLP, 99.89% accuracy, 0.91
+  macro-F1; XGBoost/LightGBM 99.85-99.86% accuracy, ~0.74 macro-F1 - each
+  family's best row in the new sweep).
+- Post 4's "just from how few examples of those exist anywhere" (an
+  unverified, vaguer-than-necessary claim) replaced with the concrete
+  `exploratory_500k_test_slice.rare_class_split_detail` numbers: the model
+  trained on 4 real straight_flush and 1 real royal_flush example (plus
+  one more of each for early-stopping signal only) and still scored 0%
+  recall on both in the held-out evaluation half (7 and 1 examples
+  respectively), with its confusion matrix showing every miss predicted as
+  plain `flush`. This is a more specific and more interesting claim than
+  the one it replaces: not "too few examples exist," but "generalized from
+  none of the few real examples it did see."
+- Thread remains an unposted draft; no post/publish-capable tool was
+  touched, per the task's standing constraint.

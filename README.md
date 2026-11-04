@@ -2,8 +2,10 @@
 
 A feedforward neural network that classifies 5-card poker hands into the UCI Poker Hand
 dataset's 10 classes, with every weight derived by hand from the rules of poker - no gradient
-descent, no label ever seen during construction - benchmarked against generously-tuned trained
-baselines (small/large MLP, XGBoost, LightGBM) on the same task and the same input encoding.
+descent, no label ever seen during construction - benchmarked against trained baselines
+(small/large MLP, XGBoost, LightGBM, each also run with a class-balanced variant) on the same
+task and the same input encoding, tuned on a small, disclosed hyperparameter grid (see
+`RESULTS.md`), not an open-ended search.
 
 **Headline result:** the hand-written net scores 100.0000% test accuracy and 1.0000 macro-F1 on
 the full 1,000,000-row UCI test set, using 393 non-zero parameters and zero training labels. No
@@ -97,16 +99,18 @@ What it does demonstrate, and what makes it worth building rather than just asse
   framing choice.
 - **It is a meaningful lower bound on what "knowing the rules perfectly" looks like as a
   parameter count and an accuracy ceiling.** 393 non-zero parameters, 100.0000% accuracy, 1.0000
-  macro-F1, exact on every one of the 10 classes including the three rarest (12, and 36, and 4
-  examples respectively, out of 1,000,000 test rows - see `RESULTS.md`'s rare-class section).
+  macro-F1, exact on every one of the 10 classes including the three rarest - four_of_a_kind,
+  straight_flush, and royal_flush, with 230, 12, and 3 examples respectively, out of 1,000,000
+  test rows (`results/handnet_test_eval.json`'s `per_class_support`; see `RESULTS.md`'s
+  rare-class section).
   Every trained baseline in this sweep, including one trained on 500,000 labels (20x the entire
   training file), falls short of that ceiling on macro-F1 and rare-class recall, not just
-  nominally but by a wide margin (closest: `mlp_large` at 25,010 labels, 0.9018 macro-F1 vs.
-  1.0000; see `RESULTS.md`). That gap is the actual empirical content of this project: not "a
-  rule-based system beats a statistical one" in the abstract, but a specific, measured answer to
-  "how much labeled data does it take a trained model to reach the ceiling a correct rule set
-  reaches with zero," on this exact task, with this exact fair encoding, with generous
-  hyperparameter tuning on the trained side.
+  nominally but by a wide margin (closest: `mlp_large`, 25,010 labels seen, no early stopping,
+  0.9084 macro-F1 vs. 1.0000; see `RESULTS.md`). That gap is the actual empirical content of
+  this project: not "a rule-based system beats a statistical one" in the abstract, but a
+  specific, measured answer to "how much labeled data does it take a trained model to reach the
+  ceiling a correct rule set reaches with zero," on this exact task, with this exact fair
+  encoding, with a disclosed, bounded hyperparameter search on the trained side.
 - **The task was chosen, and the comparison was built, to make this objection easy to raise
   convincingly, not to dodge it.** Poker hand ranking is a closed-form, fully specified function
   of the cards - there is no hidden statistical structure a learned model could uncover that the
@@ -134,7 +138,7 @@ scripts/reproduce_all.sh
 ```
 
 runs, in order: weight construction and freezing (reads no label), the label-definition audit,
-the final test-set evaluation, the full baseline sweep (38 rows, ~17 minutes), the weight
+the final test-set evaluation, the full baseline sweep (60 rows, ~18 minutes), the weight
 heatmap and neuron-reference figures, the accuracy-vs-labels plot, the browser demo build, and
 the full test suite (26 tests: exhaustive-hand correctness, card-order invariance, JS/numpy/torch
 parity, frozen-weights-match-current-spec, encoding properties). Every number in `RESULTS.md` and
@@ -156,6 +160,9 @@ through 9 = royal flush), 25,010 training rows, 1,000,000 test rows. `data/downl
 the official bundle from archive.ics.uci.edu and writes sha256 checksums to
 `data/CHECKSUMS.txt`; raw data files are gitignored and re-downloaded by that script, never
 committed. Label-definition conventions (ace-low/ace-high straights, royal flush as a subset of
-straight flush) were verified empirically against the training file before being relied on -
-see `scripts/audit_labels.py` and `RESULTS.md`'s label-audit section - rather than assumed from
-the dataset documentation alone.
+straight flush) were designed from the UCI documentation alone, before the net was frozen -
+no training or test label was read at construction time. Only after freezing was that design
+audited against all 25,010 training labels (`scripts/audit_labels.py`,
+`results/label_audit.json`: 0 mismatches) as the one allowed revision pass (Phase 2); it found
+nothing to revise, so v1 - the pre-audit net - is what `RESULTS.md` reports on. See
+`RESULTS.md`'s label-audit section.
